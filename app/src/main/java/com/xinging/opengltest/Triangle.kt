@@ -5,6 +5,27 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class Triangle {
+    companion object {
+        val vertexShaderSource =
+            """
+            #version 300 es
+            layout (location = 0) in vec3 aPos;
+            void main()
+            {
+                gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+            }
+            """.trimIndent()
+
+        val fragmentShaderSource = """
+            #version 300 es
+            precision mediump float;
+            out vec4 FragColor;
+            void main()
+            {
+                FragColor = vec4(0.0f, 0.5f, 0.2f, 1.0f);
+            }
+            """.trimIndent()
+    }
     private val vertices = floatArrayOf(
         -0.5f, -0.5f, 0.0f, // left
         0.5f, -0.5f, 0.0f, // right

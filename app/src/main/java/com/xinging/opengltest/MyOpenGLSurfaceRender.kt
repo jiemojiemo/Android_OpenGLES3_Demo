@@ -8,8 +8,8 @@ import javax.microedition.khronos.opengles.GL10
 class MyOpenGLSurfaceRender : GLSurfaceView.Renderer {
     private val tri = Triangle()
     private val shader: Shader = Shader(
-        VertexShaderSource.vertexShaderSource,
-        FragmentShaderSource.fragmentShaderSource
+        Triangle.vertexShaderSource,
+        Triangle.fragmentShaderSource
     )
 
     override fun onSurfaceCreated(p0: GL10?, p1: EGLConfig?) {
