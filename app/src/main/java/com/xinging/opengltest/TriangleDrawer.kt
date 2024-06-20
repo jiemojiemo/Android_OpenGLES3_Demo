@@ -1,10 +1,11 @@
 package com.xinging.opengltest
 
+import android.content.Context
 import android.opengl.GLES30
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class TriangleDrawer {
+class TriangleDrawer : IDrawer {
     companion object {
         val vertexShaderSource =
             """
@@ -39,7 +40,7 @@ class TriangleDrawer {
     val vaos: IntArray = intArrayOf(0)
     val vbos: IntArray = intArrayOf(0)
 
-    fun prepareData(){
+    override fun prepare(context: Context) {
         sharer.prepareShaders()
 
         // prepare vbo data
@@ -71,7 +72,7 @@ class TriangleDrawer {
         GLES30.glBindVertexArray(0)
     }
 
-    fun draw(){
+    override fun draw(){
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
         GLES30.glUseProgram(sharer.id)
