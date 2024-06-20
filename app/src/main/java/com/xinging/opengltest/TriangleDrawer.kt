@@ -4,7 +4,7 @@ import android.opengl.GLES30
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class Triangle {
+class TriangleDrawer {
     companion object {
         val vertexShaderSource =
             """
@@ -26,6 +26,10 @@ class Triangle {
             }
             """.trimIndent()
     }
+    private val sharer = Shader(
+        vertexShaderSource,
+        fragmentShaderSource
+    )
     private val vertices = floatArrayOf(
         -0.5f, -0.5f, 0.0f, // left
         0.5f, -0.5f, 0.0f, // right
@@ -36,6 +40,8 @@ class Triangle {
     val vbos: IntArray = intArrayOf(0)
 
     fun prepareData(){
+        sharer.prepareShaders()
+
         // prepare vbo data
         val vertexBuffer = ByteBuffer.allocateDirect(vertices.size * Float.SIZE_BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer()
         vertexBuffer.put(vertices)
@@ -62,6 +68,17 @@ class Triangle {
         GLES30.glEnableVertexAttribArray(0)
 
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, 0)
+        GLES30.glBindVertexArray(0)
+    }
+
+    fun draw(){
+        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+
+        GLES30.glUseProgram(sharer.id)
+        GLES30.glBindVertexArray(vaos[0])
+
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3)
+
         GLES30.glBindVertexArray(0)
     }
 }
