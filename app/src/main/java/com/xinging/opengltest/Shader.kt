@@ -29,6 +29,15 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
         return 0
     }
 
+    fun use(){
+        GLES30.glUseProgram(id)
+    }
+
+    fun setInt(name: String, value: Int){
+        val location = GLES30.glGetUniformLocation(id, name)
+        GLES30.glUniform1i(location, value)
+    }
+
     private fun createAndCompileShader(type: Int, source: String): Int{
         val success: IntArray = intArrayOf(0)
 
@@ -40,7 +49,7 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
             val log = GLES30.glGetShaderInfoLog(shader)
             Log.e(TAG, "compile vertex source failed.$log")
             GLES30.glDeleteShader(shader)
-            return -1
+            throw RuntimeException("compile shader failed")
         }
         return shader
     }
@@ -58,7 +67,7 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
             val log = GLES30.glGetShaderInfoLog(program)
             Log.e(TAG, "link shader program failed. $log")
             GLES30.glDeleteProgram(program)
-            return -1
+            throw RuntimeException("compile shader failed")
         }
 
         GLES30.glDeleteShader(vertexShader)
