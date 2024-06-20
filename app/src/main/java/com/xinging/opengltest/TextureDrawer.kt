@@ -53,6 +53,7 @@ class TextureDrawer : IDrawer{
 
     val vaos = IntBuffer.allocate(1)
     val vbos = IntBuffer.allocate(1)
+    val ebo = IntBuffer.allocate(1)
     val texIds = IntBuffer.allocate(1)
 
     private val sharer = Shader(
@@ -77,18 +78,24 @@ class TextureDrawer : IDrawer{
         checkGlError("compile shader")
 
         // prepare vbo data
-        val vertexBuffer = ByteBuffer.allocateDirect(vertices.size * Float.SIZE_BYTES).order(
-            ByteOrder.nativeOrder()).asFloatBuffer()
-        vertexBuffer.put(vertices)
-        vertexBuffer.position(0)
+        val vertexBuffer = ByteBuffer
+            .allocateDirect(vertices.size * Float.SIZE_BYTES)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .apply {
+                put(vertices)
+                position(0)
+            }
 
-        // generate vao and vbo
+        // generate vao, vbo and ebo
         GLES30.glGenVertexArrays(1, vaos)
         GLES30.glGenBuffers(1, vbos)
+        GLES30.glGenBuffers(1, ebo)
         checkGlError("gen vertex array and buffer")
 
-        // configure vao and vbo....
+        // bind and set vao
         GLES30.glBindVertexArray(vaos[0])
+
         // set vbo data
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbos[0])
         GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER,
@@ -98,14 +105,30 @@ class TextureDrawer : IDrawer{
         )
         checkGlError("glBufferData")
 
+        // set ebo data
+        val indexBuffer = ByteBuffer
+            .allocateDirect(indices.size * Int.SIZE_BYTES)
+            .order(ByteOrder.nativeOrder())
+            .asIntBuffer()
+            .apply {
+                put(indices)
+                position(0)
+            }
+        GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, ebo[0])
+        GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER,
+            Int.SIZE_BYTES * indices.size,
+            indexBuffer,
+            GLES30.GL_STATIC_DRAW
+        )
+        checkGlError("glBufferData for indices")
+
         // set vao attribute
-        GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 6 * Float.SIZE_BYTES, 0)
+        GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 5 * Float.SIZE_BYTES, 0)
         GLES30.glEnableVertexAttribArray(0)
-        GLES30.glVertexAttribPointer(1, 2, GLES30.GL_FLOAT, false, 6 * Float.SIZE_BYTES, 3 * Float.SIZE_BYTES)
+        GLES30.glVertexAttribPointer(1, 2, GLES30.GL_FLOAT, false, 5 * Float.SIZE_BYTES, 3 * Float.SIZE_BYTES)
         GLES30.glEnableVertexAttribArray(1)
 
-        // unbind
-        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, 0)
+        // unbind vao
         GLES30.glBindVertexArray(0)
 
         // prepare texture
@@ -123,14 +146,19 @@ class TextureDrawer : IDrawer{
         // set texture image data
         val options = BitmapFactory.Options()
         options.inScaled = false   // No pre-scaling
-        val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.lye, options)
+        var bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.lye, options)
+
+        // Flip the bitmap vertically
+        val matrix = android.graphics.Matrix()
+        matrix.preScale(1.0f, -1.0f)
+        bitmap = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, false)
+
         GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
         checkGlError("texImage2D")
         bitmap.recycle()
 
         // unbind texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
-
 
         // use share program and set texture location
         sharer.use()
@@ -144,10 +172,10 @@ class TextureDrawer : IDrawer{
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
 
-        val indicesBuffer = ByteBuffer.allocateDirect(indices.size * Int.SIZE_BYTES).order(
-            ByteOrder.nativeOrder()).asIntBuffer()
-        indicesBuffer.put(indices)
-        indicesBuffer.position(0)
-        GLES30.glDrawElements(GLES30.GL_TRIANGLES, 6, GLES30.GL_UNSIGNED_INT, indicesBuffer)
+        GLES30.glDrawElements(GLES30.GL_TRIANGLES, indices.size, GLES30.GL_UNSIGNED_INT, 0)
+
+        // unbind vao
+        GLES30.glBindVertexArray(0)
     }
+
 }
