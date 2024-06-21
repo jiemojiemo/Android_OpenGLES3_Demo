@@ -9,40 +9,51 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
 
-class TextureDrawer : IDrawer{
+class TextureDrawer : IDrawer {
 
-    companion object{
+    companion object {
         val vertexShaderSource =
             """
             #version 300 es
-            layout(location = 0) in vec3 aPos;
-            layout(location = 1) in vec2 aTexCoord;
-            out vec2 texCoord;
+
+            layout(location = 0) in vec4 a_position;
+            layout(location = 1) in vec2 a_texcoord;
+            
+            out vec4 v_position;
+            out vec2 v_texcoord;
+            
             void main()
             {
-                gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-                texCoord = aTexCoord;
+                gl_Position = a_position;
+                v_position = a_position;
+                v_texcoord = a_texcoord;
             }
             """.trimIndent()
 
         val fragmentShaderSource =
             """
             #version 300 es
-            in vec2 texCoord;
-            uniform sampler2D texture1;
-            out vec4 FragColor;
-            void main()
+            precision mediump float;
+            
+            uniform sampler2D texture0;
+
+            in vec4 v_position;
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
             {
-                FragColor = texture(texture1, texCoord);
+                fragColor = texture(texture0, v_texcoord);
             }
             """.trimIndent()
     }
 
     private val vertices = floatArrayOf(
         // positions       // texture coords
-        0.5f, 0.5f, 0.0f,  1.0f, 1.0f,   // top right
+        0.5f, 0.5f, 0.0f, 1.0f, 1.0f,   // top right
         0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,0.0f, 0.0f, // bottom left
+        -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
         -0.5f, 0.5f, 0.0f, 0.0f, 1.0f   // top left
     )
 
@@ -72,7 +83,7 @@ class TextureDrawer : IDrawer{
         }
     }
 
-    override fun prepare(context: Context){
+    override fun prepare(context: Context) {
         // compile shader
         sharer.prepareShaders()
         checkGlError("compile shader")
@@ -98,7 +109,8 @@ class TextureDrawer : IDrawer{
 
         // set vbo data
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbos[0])
-        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER,
+        GLES30.glBufferData(
+            GLES30.GL_ARRAY_BUFFER,
             Float.SIZE_BYTES * vertices.size,
             vertexBuffer,
             GLES30.GL_STATIC_DRAW
@@ -115,7 +127,8 @@ class TextureDrawer : IDrawer{
                 position(0)
             }
         GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, ebo[0])
-        GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER,
+        GLES30.glBufferData(
+            GLES30.GL_ELEMENT_ARRAY_BUFFER,
             Int.SIZE_BYTES * indices.size,
             indexBuffer,
             GLES30.GL_STATIC_DRAW
@@ -125,7 +138,14 @@ class TextureDrawer : IDrawer{
         // set vao attribute
         GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 5 * Float.SIZE_BYTES, 0)
         GLES30.glEnableVertexAttribArray(0)
-        GLES30.glVertexAttribPointer(1, 2, GLES30.GL_FLOAT, false, 5 * Float.SIZE_BYTES, 3 * Float.SIZE_BYTES)
+        GLES30.glVertexAttribPointer(
+            1,
+            2,
+            GLES30.GL_FLOAT,
+            false,
+            5 * Float.SIZE_BYTES,
+            3 * Float.SIZE_BYTES
+        )
         GLES30.glEnableVertexAttribArray(1)
 
         // unbind vao
@@ -139,7 +159,11 @@ class TextureDrawer : IDrawer{
         checkGlError("glBindTexture")
 
         // set filtering
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST)
+        GLES30.glTexParameteri(
+            GLES30.GL_TEXTURE_2D,
+            GLES30.GL_TEXTURE_MIN_FILTER,
+            GLES30.GL_NEAREST
+        )
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
         checkGlError("glTexParameteri")
 
@@ -151,7 +175,15 @@ class TextureDrawer : IDrawer{
         // Flip the bitmap vertically
         val matrix = android.graphics.Matrix()
         matrix.preScale(1.0f, -1.0f)
-        bitmap = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, false)
+        bitmap = android.graphics.Bitmap.createBitmap(
+            bitmap,
+            0,
+            0,
+            bitmap.width,
+            bitmap.height,
+            matrix,
+            false
+        )
 
         GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
         checkGlError("texImage2D")
@@ -165,7 +197,7 @@ class TextureDrawer : IDrawer{
         sharer.setInt("texture1", 0)
     }
 
-    override fun draw(){
+    override fun draw() {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
         GLES30.glBindVertexArray(vaos[0])

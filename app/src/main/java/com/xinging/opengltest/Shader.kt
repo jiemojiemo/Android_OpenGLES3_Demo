@@ -12,13 +12,13 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
         // compile vertex shader
         val vertexShader = createAndCompileShader(GLES30.GL_VERTEX_SHADER, vertexShaderSource)
         if(vertexShader == -1){
-            return -1
+            throw RuntimeException("compile vertex source failed.")
         }
 
         // compile fragment shader
         val fragmentShader = createAndCompileShader(GLES30.GL_FRAGMENT_SHADER, fragmentShaderSource)
         if(fragmentShader == -1){
-            return -1
+            throw RuntimeException("compile fragment source failed.")
         }
 
         id = createShaderProgram(vertexShader, fragmentShader)
@@ -49,7 +49,7 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
             val log = GLES30.glGetShaderInfoLog(shader)
             Log.e(TAG, "compile vertex source failed.$log")
             GLES30.glDeleteShader(shader)
-            throw RuntimeException("compile shader failed")
+            return -1
         }
         return shader
     }
