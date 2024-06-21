@@ -1,28 +1,25 @@
 package com.xinging.opengltest
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.opengl.GLES30
-import android.opengl.GLUtils
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
 
-class TextureDrawer : IDrawer {
+class NV21ToRGBDrawer : IDrawer {
 
     companion object {
         val vertexShaderSource =
             """
             #version 300 es
-
-            layout(location = 0) in vec4 a_position;
+            layout(location = 0) in vec3 a_position;
             layout(location = 1) in vec2 a_texcoord;
             
             out vec2 v_texcoord;
             
             void main()
             {
-                gl_Position = a_position;
+                gl_Position = vec4(a_position, 1.0);
                 v_texcoord = a_texcoord;
             }
             """.trimIndent()
@@ -32,16 +29,28 @@ class TextureDrawer : IDrawer {
             #version 300 es
             precision mediump float;
             
-            uniform sampler2D texture0;
-
+            uniform sampler2D y_texture;
+            uniform sampler2D uv_texture;
+            
             in vec2 v_texcoord;
-
+            
             out vec4 fragColor;
-
-            void main(void)
+            
+            void main()
             {
-                fragColor = texture(texture0, v_texcoord);
+               vec3 yuv;
+               yuv.x = texture(y_texture,v_texcoord).r;  // y
+               yuv.y = texture(uv_texture,v_texcoord).a;  // u
+               yuv.z = texture(uv_texture,v_texcoord).r;  // v
+               mat3 m = mat3(
+                    1.0, 1.0, 1.0,  
+                    0.0, -0.39465, 2.03211, 
+                    1.13983, -0.58060, 0.0);
+               
+               vec3 rgb = m * yuv;
+               fragColor = vec4(rgb, 1.0);
             }
+            
             """.trimIndent()
     }
 
@@ -58,22 +67,28 @@ class TextureDrawer : IDrawer {
         1, 2, 3  // second triangle
     )
 
-    val vaos = IntBuffer.allocate(1)
-    val vbos = IntBuffer.allocate(1)
-    val ebo = IntBuffer.allocate(1)
-    val texIds = IntBuffer.allocate(1)
-
     private val shader = Shader(
         vertexShaderSource,
         fragmentShaderSource
     )
 
+    val vaos = IntBuffer.allocate(1)
+    val vbos = IntBuffer.allocate(1)
+    val ebo = IntBuffer.allocate(1)
+    val texIds = IntBuffer.allocate(2)
     override fun prepare(context: Context) {
         // compile shader
         shader.prepareShaders()
-        MyGLUtils.checkGlError("compile shader")
 
-        // prepare vbo data
+        // generate vao, vbo, ebo
+        GLES30.glGenVertexArrays(1, vaos)
+        GLES30.glGenBuffers(1, vbos)
+        GLES30.glGenBuffers(1, ebo)
+
+        // bind vao
+        GLES30.glBindVertexArray(vaos[0])
+
+        // set vbo data
         val vertexBuffer = ByteBuffer
             .allocateDirect(vertices.size * Float.SIZE_BYTES)
             .order(ByteOrder.nativeOrder())
@@ -82,17 +97,6 @@ class TextureDrawer : IDrawer {
                 put(vertices)
                 position(0)
             }
-
-        // generate vao, vbo and ebo
-        GLES30.glGenVertexArrays(1, vaos)
-        GLES30.glGenBuffers(1, vbos)
-        GLES30.glGenBuffers(1, ebo)
-        MyGLUtils.checkGlError("gen vertex array and buffer")
-
-        // bind and set vao
-        GLES30.glBindVertexArray(vaos[0])
-
-        // set vbo data
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbos[0])
         GLES30.glBufferData(
             GLES30.GL_ARRAY_BUFFER,
@@ -136,63 +140,89 @@ class TextureDrawer : IDrawer {
         // unbind vao
         GLES30.glBindVertexArray(0)
 
-        // prepare texture
-        // generate texture id
-        GLES30.glGenTextures(texIds.capacity(), texIds)
-        MyGLUtils.checkGlError("glGenTextures")
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
-        MyGLUtils.checkGlError("glBindTexture")
 
-        // set filtering
+        // prepare texture
+        GLES30.glGenTextures(2, texIds)
+        MyGLUtils.checkGlError("glGenTextures")
+
+        // load texture data
+        val width = 512;
+        val height = 512;
+        val inputStream = context.resources.openRawResource(R.raw.rainbow_nv21)
+        val buffer = ByteArray(inputStream.available())
+        inputStream.read(buffer)
+        inputStream.close()
+
+        val byteBuffer = ByteBuffer.allocateDirect(buffer.size)
+        byteBuffer.put(buffer)
+        byteBuffer.flip() // 确保缓冲区准备好读取
+
+        // configure Y texture
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
         GLES30.glTexParameteri(
             GLES30.GL_TEXTURE_2D,
             GLES30.GL_TEXTURE_MIN_FILTER,
             GLES30.GL_NEAREST
         )
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
-        MyGLUtils.checkGlError("glTexParameteri")
-
-        // set texture image data
-        val options = BitmapFactory.Options()
-        options.inScaled = false   // No pre-scaling
-        var bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.lye, options)
-
-        // Flip the bitmap vertically
-        val matrix = android.graphics.Matrix()
-        matrix.preScale(1.0f, -1.0f)
-        bitmap = android.graphics.Bitmap.createBitmap(
-            bitmap,
+        GLES30.glTexImage2D(
+            GLES30.GL_TEXTURE_2D,
             0,
+            GLES30.GL_LUMINANCE,
+            width,
+            height,
             0,
-            bitmap.width,
-            bitmap.height,
-            matrix,
-            false
+            GLES30.GL_LUMINANCE,
+            GLES30.GL_UNSIGNED_BYTE,
+            byteBuffer
+            )
+        MyGLUtils.checkGlError("configure Y texture")
+
+
+        // configure UV texture
+        val uvWidth = width / 2
+        val uvHeight = height / 2
+        val offset = width * height
+        byteBuffer.position(offset)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[1])
+        GLES30.glTexParameteri(
+            GLES30.GL_TEXTURE_2D,
+            GLES30.GL_TEXTURE_MIN_FILTER,
+            GLES30.GL_NEAREST
         )
-
-        GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
-        MyGLUtils.checkGlError("texImage2D")
-        bitmap.recycle()
-
-        // unbind texture
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexImage2D(
+            GLES30.GL_TEXTURE_2D,
+            0,
+            GLES30.GL_LUMINANCE_ALPHA,
+            uvWidth,
+            uvHeight,
+            0,
+            GLES30.GL_LUMINANCE_ALPHA,
+            GLES30.GL_UNSIGNED_BYTE,
+            byteBuffer
+        )
+        MyGLUtils.checkGlError("configure UV texture")
 
         // use share program and set texture location
         shader.use()
-        shader.setInt("texture1", 0)
+        shader.setInt("y_texture", 0)
+        shader.setInt("uv_texture", 1)
     }
 
     override fun draw() {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
         GLES30.glBindVertexArray(vaos[0])
+
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[1])
 
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indices.size, GLES30.GL_UNSIGNED_INT, 0)
 
         // unbind vao
         GLES30.glBindVertexArray(0)
     }
-
 }
