@@ -19,13 +19,11 @@ class TextureDrawer : IDrawer {
             layout(location = 0) in vec4 a_position;
             layout(location = 1) in vec2 a_texcoord;
             
-            out vec4 v_position;
             out vec2 v_texcoord;
             
             void main()
             {
                 gl_Position = a_position;
-                v_position = a_position;
                 v_texcoord = a_texcoord;
             }
             """.trimIndent()
@@ -37,7 +35,6 @@ class TextureDrawer : IDrawer {
             
             uniform sampler2D texture0;
 
-            in vec4 v_position;
             in vec2 v_texcoord;
 
             out vec4 fragColor;
