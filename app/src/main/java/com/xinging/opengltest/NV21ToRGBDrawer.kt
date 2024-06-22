@@ -40,8 +40,8 @@ class NV21ToRGBDrawer : IDrawer {
             {
                vec3 yuv;
                yuv.x = texture(y_texture,v_texcoord).r;  // y
-               yuv.y = texture(uv_texture,v_texcoord).a;  // u
-               yuv.z = texture(uv_texture,v_texcoord).r;  // v
+               yuv.y = texture(uv_texture,v_texcoord).a-0.5;  // u
+               yuv.z = texture(uv_texture,v_texcoord).r-0.5;  // v
                mat3 m = mat3(
                     1.0, 1.0, 1.0,  
                     0.0, -0.39465, 2.03211, 
@@ -146,8 +146,8 @@ class NV21ToRGBDrawer : IDrawer {
         MyGLUtils.checkGlError("glGenTextures")
 
         // load texture data
-        val width = 512;
-        val height = 512;
+        val width = 700
+        val height = 700
         val inputStream = context.resources.openRawResource(R.raw.rainbow_nv21)
         val buffer = ByteArray(inputStream.available())
         inputStream.read(buffer)
