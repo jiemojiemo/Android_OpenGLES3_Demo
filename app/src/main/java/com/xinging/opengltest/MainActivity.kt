@@ -13,6 +13,6 @@ class MainActivity : AppCompatActivity() {
 
         glSurfaceView = findViewById(R.id.gl_surface_view)
         glSurfaceView.setEGLContextClientVersion(3)
-        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(YUV420PToRGBDrawer(), this))
+        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(NV21ToRGBDrawer(), this))
     }
 }

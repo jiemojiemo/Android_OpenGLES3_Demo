@@ -39,13 +39,13 @@ class NV21ToRGBDrawer : IDrawer {
             void main()
             {
                vec3 yuv;
-               yuv.x = texture(y_texture,v_texcoord).r;  // y
+               yuv.x = texture(y_texture,v_texcoord).r-0.0625;  // y
                yuv.y = texture(uv_texture,v_texcoord).a-0.5;  // u
                yuv.z = texture(uv_texture,v_texcoord).r-0.5;  // v
                mat3 m = mat3(
-                    1.0, 1.0, 1.0,  
-                    0.0, -0.39465, 2.03211, 
-                    1.13983, -0.58060, 0.0);
+                    1.164, 1.164, 1.164,  
+                    0.0, -0.213, 2.112, 
+                    1.793, -0.533, 0.0);
                
                vec3 rgb = m * yuv;
                fragColor = vec4(rgb, 1.0);
