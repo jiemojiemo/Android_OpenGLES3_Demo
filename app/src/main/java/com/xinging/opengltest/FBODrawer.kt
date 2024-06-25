@@ -8,21 +8,20 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
 
-class TextureDrawer : IDrawer {
+class FBODrawer : IDrawer {
 
     companion object {
         val vertexShaderSource =
             """
             #version 300 es
-
-            layout(location = 0) in vec4 a_position;
+            layout(location = 0) in vec3 a_position;
             layout(location = 1) in vec2 a_texcoord;
             
             out vec2 v_texcoord;
             
             void main()
             {
-                gl_Position = a_position;
+                gl_Position = vec4(a_position, 1.0);
                 v_texcoord = a_texcoord;
             }
             """.trimIndent()
@@ -43,7 +42,36 @@ class TextureDrawer : IDrawer {
                 fragColor = texture(texture0, v_texcoord);
             }
             """.trimIndent()
+
+        val fboFragmentShaderSource =
+            """
+            #version 300 es
+            precision mediump float;
+            
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                vec4 tempColor = texture(texture0, v_texcoord);
+                float gray = 0.299*tempColor.a + 0.587*tempColor.g + 0.114*tempColor.b;
+                fragColor = vec4(vec3(gray), 1.0);
+            }
+            """.trimIndent()
     }
+
+    private val shader = Shader(
+        vertexShaderSource,
+        fragmentShaderSource
+    )
+
+    private val fboShader = Shader(
+        vertexShaderSource,
+        fboFragmentShaderSource
+    )
 
     private val vertices = floatArrayOf(
         // positions       // texture coords
@@ -62,18 +90,16 @@ class TextureDrawer : IDrawer {
     val vbos = IntBuffer.allocate(1)
     val ebo = IntBuffer.allocate(1)
     val texIds = IntBuffer.allocate(1)
-
-    private val shader = Shader(
-        vertexShaderSource,
-        fragmentShaderSource
-    )
+    val fboTexIds = IntBuffer.allocate(1)
+    val fbo = IntBuffer.allocate(1)
+    var imageWidth = 0
+    var imageHeight = 0
 
     override fun prepare(context: Context) {
-        // compile shader
         shader.prepareShaders()
-        MyGLUtils.checkGlError("compile shader")
+        fboShader.prepareShaders()
 
-        // prepare vbo data
+        // generate vao, vbo, ebo
         val vertexBuffer = ByteBuffer
             .allocateDirect(vertices.size * Float.SIZE_BYTES)
             .order(ByteOrder.nativeOrder())
@@ -156,6 +182,8 @@ class TextureDrawer : IDrawer {
         val options = BitmapFactory.Options()
         options.inScaled = false   // No pre-scaling
         var bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.lye, options)
+        imageWidth = bitmap.width
+        imageHeight = bitmap.height
 
         // Flip the bitmap vertically
         val matrix = android.graphics.Matrix()
@@ -177,22 +205,54 @@ class TextureDrawer : IDrawer {
         // unbind texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
 
-        // use share program and set texture location
-        shader.use()
-        shader.setInt("texture0", 0)
+        // prepare fbo
+
+        // generate fbo texture id and then config texture
+        GLES30.glGenTextures(1, fboTexIds)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTexIds[0])
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, GLES30.GL_NONE)
+
+        // generate fbo id and config fbo
+        // 创建 FBO
+        GLES30.glGenFramebuffers(1, fbo);
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0])
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTexIds[0])
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, fboTexIds[0], 0)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, imageWidth, imageHeight, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
+        MyGLUtils.checkGlError("configure fbo")
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, GLES30.GL_NONE)
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, GLES30.GL_NONE)
     }
 
     override fun draw() {
-        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+        // first, fbo off screen rendering
+//        GLES30.glViewport(0, 0, imageHeight, imageHeight)
 
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0])
+        fboShader.use()
+        fboShader.setInt("texture0", 0)
         GLES30.glBindVertexArray(vaos[0])
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
+        GLES30.glDrawElements(GLES30.GL_TRIANGLES, indices.size, GLES30.GL_UNSIGNED_INT, 0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
+        GLES30.glBindVertexArray(0)
+
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+
+        // second, draw texture to screen
+        shader.use()
+        shader.setInt("texture0", 0)
+        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+        GLES30.glBindVertexArray(vaos[0])
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTexIds[0]) // 用 fbo 渲染的结果作为纹理的输入
 
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indices.size, GLES30.GL_UNSIGNED_INT, 0)
 
         // unbind vao
         GLES30.glBindVertexArray(0)
     }
-
 }
