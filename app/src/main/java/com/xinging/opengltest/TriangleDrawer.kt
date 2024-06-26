@@ -5,7 +5,7 @@ import android.opengl.GLES30
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class TriangleDrawer : IDrawer {
+class TriangleDrawer : AbstractDrawer() {
     companion object {
         val vertexShaderSource =
             """
@@ -73,6 +73,7 @@ class TriangleDrawer : IDrawer {
     }
 
     override fun draw(){
+        GLES30.glViewport(0, 0, screenWidth, screenHeight)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
         GLES30.glUseProgram(sharer.id)

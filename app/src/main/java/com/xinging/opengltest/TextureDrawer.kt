@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
 
-class TextureDrawer : IDrawer {
+class TextureDrawer : AbstractDrawer() {
 
     companion object {
         val vertexShaderSource =
@@ -183,6 +183,8 @@ class TextureDrawer : IDrawer {
     }
 
     override fun draw() {
+        GLES30.glViewport(0, 0, screenWidth, screenHeight)
+
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
         GLES30.glBindVertexArray(vaos[0])

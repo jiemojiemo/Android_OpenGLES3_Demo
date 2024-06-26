@@ -19,7 +19,7 @@ class MyOpenGLSurfaceRender(
     }
 
     override fun onSurfaceChanged(p0: GL10?, width: Int, height: Int) {
-        GLES30.glViewport(0, 0, width, height)
+        drawer.setScreenSize(width, height)
     }
 
     override fun onDrawFrame(p0: GL10?) {
