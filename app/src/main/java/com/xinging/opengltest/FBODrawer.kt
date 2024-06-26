@@ -1,7 +1,5 @@
 package com.xinging.opengltest
 
-import android.R.attr.height
-import android.R.attr.width
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -82,10 +80,10 @@ class FBODrawer : AbstractDrawer() {
 
     private val vertices = floatArrayOf(
         // positions       // texture coords
-        0.5f, 0.5f, 0.0f, 1.0f, 1.0f,   // top right
-        0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // bottom left
-        -0.5f, 0.5f, 0.0f, 0.0f, 1.0f   // top left
+        1f, 1f, 0.0f, 1.0f, 1.0f,   // top right
+        1f, -1f, 0.0f, 1.0f, 0.0f,  // bottom right
+        -1f, -1f, 0.0f, 0.0f, 0.0f, // bottom left
+        -1f, 1f, 0.0f, 0.0f, 1.0f   // top left
     )
 
     private val indices = intArrayOf(
@@ -96,7 +94,7 @@ class FBODrawer : AbstractDrawer() {
     val vaos = IntBuffer.allocate(1)
     val vbos = IntBuffer.allocate(1)
     val ebo = IntBuffer.allocate(1)
-    val texIds = IntBuffer.allocate(1)
+    val imageTexIds = IntBuffer.allocate(1)
     val fboTexIds = IntBuffer.allocate(1)
     val fbo = IntBuffer.allocate(1)
     var imageWidth = 0
@@ -172,9 +170,9 @@ class FBODrawer : AbstractDrawer() {
 
         // prepare texture
         // generate texture id
-        GLES30.glGenTextures(texIds.capacity(), texIds)
+        GLES30.glGenTextures(imageTexIds.capacity(), imageTexIds)
         MyGLUtils.checkGlError("glGenTextures")
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, imageTexIds[0])
         MyGLUtils.checkGlError("glBindTexture")
 
         // set filtering
@@ -192,6 +190,23 @@ class FBODrawer : AbstractDrawer() {
         var bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.lye, options)
         imageWidth = bitmap.width
         imageHeight = bitmap.height
+
+        // Flip the bitmap vertically
+        val matrix = android.graphics.Matrix()
+        matrix.preScale(1.0f, -1.0f)
+        bitmap = android.graphics.Bitmap.createBitmap(
+            bitmap,
+            0,
+            0,
+            bitmap.width,
+            bitmap.height,
+            matrix,
+            false
+        )
+
+        GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
+        MyGLUtils.checkGlError("texImage2D")
+        bitmap.recycle()
 
         // unbind texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
@@ -220,36 +235,15 @@ class FBODrawer : AbstractDrawer() {
     private var done = false
     override fun draw() {
         // first, fbo off screen rendering
-        GLES30.glViewport(0, 0, imageHeight, imageHeight)
+        GLES30.glViewport(0, 0, imageWidth, imageHeight)
 
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0])
         fboShader.use()
         fboShader.setInt("texture0", 0)
         GLES30.glBindVertexArray(vaos[0])
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fboTexIds[0])
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, imageTexIds[0])
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indices.size, GLES30.GL_UNSIGNED_INT, 0)
-
-        if(!done){
-            val buffer = ByteBuffer.allocateDirect(imageWidth * imageHeight * 4)
-            buffer.order(ByteOrder.nativeOrder())
-            GLES30.glReadPixels(0, 0, imageWidth, imageHeight, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer);
-
-            buffer.position(0)
-            val bitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
-            bitmap.copyPixelsFromBuffer(buffer)
-
-            val cacheDir = context!!.externalCacheDir
-            val file = File(cacheDir, "image.png")
-            Log.d("FBO", "save to ${file.path}")
-
-            val outputStream = FileOutputStream(file)
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-            outputStream.close()
-
-            done = true
-        }
-
 
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
         GLES30.glBindVertexArray(0)
