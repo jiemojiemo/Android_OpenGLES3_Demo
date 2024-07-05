@@ -57,7 +57,7 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
         GLES30.glGetShaderiv(shader, GLES30.GL_COMPILE_STATUS, success, 0)
         if (success[0] == 0) {
             val log = GLES30.glGetShaderInfoLog(shader)
-            Log.e(TAG, "compile vertex source failed.$log")
+            Log.e(TAG, "compile shader source failed.$log")
             GLES30.glDeleteShader(shader)
             return -1
         }

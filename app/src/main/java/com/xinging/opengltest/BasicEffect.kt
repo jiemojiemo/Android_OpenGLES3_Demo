@@ -120,9 +120,188 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
             }
         """.trimIndent()
 
+        private val QUAD_SPLIT_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform vec2 resolution;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                vec2 newTexCoord = v_texcoord;
+                if(newTexCoord.x < 0.5){
+                    newTexCoord.x = newTexCoord.x * 2.0;
+                }else{
+                    newTexCoord.x = (newTexCoord.x-0.5) * 2.0;
+                }
+                
+                if(newTexCoord.y < 0.5){
+                    newTexCoord.y = newTexCoord.y * 2.0;
+                }else{
+                    newTexCoord.y = (newTexCoord.y-0.5) * 2.0;
+                }
+                
+                fragColor = texture(texture0, newTexCoord);
+            }
+        """.trimIndent()
+
+        private val BLINDS_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform vec2 resolution;
+            uniform float offset;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                float shuttersMaxH = 1.0 / 10.0;
+                float shuttersH = -shuttersMaxH*offset + shuttersMaxH;
+                float y = mod(v_texcoord.y, shuttersMaxH);
+                
+                if(y < shuttersH)
+                {
+                    fragColor = vec4(1.0,1.0,1.0,1.0);
+                }else
+                {
+                    fragColor = texture(texture0, v_texcoord);
+                }
+            }
+        """.trimIndent()
+
+        private val DISSOLVE_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform sampler2D texture0;
+            uniform float offset;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            float rand2(vec2 co){
+                return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            void main(void)
+            {
+
+                float randomValue = rand2(v_texcoord);
+                if(randomValue < offset){
+                    fragColor = texture(texture0, v_texcoord);
+                }else{
+                    fragColor = vec4(1.0,1.0,1.0,1.0);
+                }
+            }
+        """.trimIndent()
+
+        private val SPLITTING_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform float offset;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                float w = -offset + 1.0;
+                float dis = abs(v_texcoord.x - 0.5);
+                if(dis < w/2.0){
+                  fragColor = vec4(1.0,1.0,1.0,1.0);
+                }else{
+                  fragColor = texture(texture0, v_texcoord);
+                }
+            }
+        """.trimIndent()
+
+        private val WHEEL_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform float offset;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                vec2 circlePos = vec2(0.5, 0.5); // 圆心位置
+                vec2 direction = v_texcoord - circlePos; // 从圆心指向当前片元的向量
+
+                // 计算当前片元相对于圆心的角度
+                float angle = atan(direction.y, direction.x);
+
+                // 将角度范围从 [-π, π] 映射到 [0, 2π]
+                if (angle < 0.0) {
+                    angle += 2.0 * 3.14159265358979323846;
+                }
+
+                // 当前阈值角度，offset 控制动画进度，范围为 [0, 2π]
+                float curAngle = offset * 2.0 * 3.14159265358979323846;
+
+                // 根据当前片元的角度和阈值角度决定片元颜色
+                if (angle < curAngle) {
+                    fragColor = texture(texture0, v_texcoord); // 显示纹理
+                } else {
+                    fragColor = vec4(1.0, 1.0, 1.0, 1.0); // 显示白色
+                }
+            }
+        """.trimIndent()
+
+        private val MOSAIC_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                float numBlockX = 150.0;
+                float numBlockY = 150.0;
+                float stepX = 1.0 / numBlockX;
+                float stepY = 1.0 / numBlockY;
+                float indexBlockX = floor(v_texcoord.x / stepX);
+                float indexBlockY = floor(v_texcoord.y / stepY);
+                
+                vec2 currentBlockLeftBottom = vec2(indexBlockX*stepX, indexBlockY*stepY);
+                
+                fragColor = texture(texture0, currentBlockLeftBottom);
+            }
+        """.trimIndent()
+
         val fragmentShaderSources: Map<BasicEffectType, String> = mapOf(
             BasicEffectType.DYNAMIC_MESH to DYNAMIC_MESH_SOURCE,
-            BasicEffectType.DYNAMIC_CIRCLE to DYNAMIC_CIRCLE_SOURCE
+            BasicEffectType.DYNAMIC_CIRCLE to DYNAMIC_CIRCLE_SOURCE,
+            BasicEffectType.QUAD_SPLIT to QUAD_SPLIT_SOURCE,
+            BasicEffectType.BLINDS to BLINDS_SOURCE,
+            BasicEffectType.DISSOLVE to DISSOLVE_SOURCE,
+            BasicEffectType.SPLITTING to SPLITTING_SOURCE,
+            BasicEffectType.WHEEL to WHEEL_SOURCE,
+            BasicEffectType.MOSAIC to MOSAIC_SOURCE
         )
     }
 
@@ -270,7 +449,7 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
     override fun draw() {
         // update offset
         offset += offsetStep
-        if(offset >= 1.0f){
+        if (offset >= 1.0f) {
             offset = 0.0f
         }
         shader.setFloat("offset", offset)
