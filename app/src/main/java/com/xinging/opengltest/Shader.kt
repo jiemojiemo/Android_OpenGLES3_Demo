@@ -38,6 +38,16 @@ class Shader(private val vertexShaderSource: String, private val fragmentShaderS
         GLES30.glUniform1i(location, value)
     }
 
+    fun setFloat(name: String, value: Float){
+        val location = GLES30.glGetUniformLocation(id, name)
+        GLES30.glUniform1f(location, value)
+    }
+     fun setVec2(name: String, vec2: FloatArray){
+         assert(vec2.size >= 2)
+         val location = GLES30.glGetUniformLocation(id, name)
+         GLES30.glUniform2fv(location, 1, vec2, 0)
+     }
+
     private fun createAndCompileShader(type: Int, source: String): Int{
         val success: IntArray = intArrayOf(0)
 

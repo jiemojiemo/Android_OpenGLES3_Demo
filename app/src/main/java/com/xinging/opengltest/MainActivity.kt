@@ -15,7 +15,7 @@ class MainActivity : AppCompatActivity() {
 
         glSurfaceView = findViewById(R.id.gl_surface_view)
         glSurfaceView.setEGLContextClientVersion(3)
-        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(FBODrawer(), this))
+        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(BasicEffect(BasicEffectType.DYNAMIC_MESH), this))
 
         requestPermissions()
     }
