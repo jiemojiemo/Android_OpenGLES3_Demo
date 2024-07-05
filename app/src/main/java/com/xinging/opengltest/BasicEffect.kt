@@ -87,8 +87,42 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
 
             """.trimIndent()
 
+        private val DYNAMIC_CIRCLE_SOURCE = """
+            #version 300 es
+            precision mediump float;
+
+            uniform vec2 resolution;
+            uniform float offset;
+
+            uniform sampler2D texture0;
+
+            in vec2 v_texcoord;
+
+            out vec4 fragColor;
+
+            void main(void)
+            {
+                float minR = 0.2;
+                float maxR = 1.0;
+                float r = (minR - maxR)*offset + maxR;
+                vec2 circlePoint = vec2(0.5, 0.5);
+                
+                vec2 circlePointRes = circlePoint * resolution;
+                vec2 texcoordRes = v_texcoord * resolution;
+                float rRes = r * resolution.x * 0.5;
+                float dis = distance(circlePointRes, texcoordRes);
+                if(dis < rRes){
+                    fragColor = texture(texture0, v_texcoord); 
+                }else
+                {
+                    fragColor = vec4(1,1,1,1);
+                }
+            }
+        """.trimIndent()
+
         val fragmentShaderSources: Map<BasicEffectType, String> = mapOf(
-            BasicEffectType.DYNAMIC_MESH to DYNAMIC_MESH_SOURCE
+            BasicEffectType.DYNAMIC_MESH to DYNAMIC_MESH_SOURCE,
+            BasicEffectType.DYNAMIC_CIRCLE to DYNAMIC_CIRCLE_SOURCE
         )
     }
 
@@ -110,7 +144,9 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
     val ebo = IntBuffer.allocate(1)
     val texIds = IntBuffer.allocate(1)
     var offset = 0.0f
-    var offsetStep = 0.01f
+    var offsetStep = 0.005f
+    var imageWidth: Int = 0
+    var imageHeight: Int = 0
 
     private lateinit var shader: Shader
     override fun prepare(context: Context) {
@@ -214,6 +250,8 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
             matrix,
             false
         )
+        imageWidth = bitmap.width
+        imageHeight = bitmap.height
 
         GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
         MyGLUtils.checkGlError("texImage2D")
@@ -233,11 +271,11 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
         // update offset
         offset += offsetStep
         if(offset >= 1.0f){
-            offset -= 1.0f
+            offset = 0.0f
         }
         shader.setFloat("offset", offset)
 
-        val resolution = floatArrayOf(screenWidth.toFloat(), screenHeight.toFloat())
+        val resolution = floatArrayOf(imageWidth.toFloat(), imageHeight.toFloat())
         shader.setVec2("resolution", resolution)
 
         GLES30.glViewport(0, 0, screenWidth, screenHeight)
