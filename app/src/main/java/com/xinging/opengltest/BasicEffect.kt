@@ -134,22 +134,14 @@ class BasicEffect(private val effectType: BasicEffectType) : AbstractDrawer() {
 
             void main(void)
             {
-                vec2 newTexCoord = v_texcoord;
-                if(newTexCoord.x < 0.5){
-                    newTexCoord.x = newTexCoord.x * 2.0;
-                }else{
-                    newTexCoord.x = (newTexCoord.x-0.5) * 2.0;
-                }
+                float N = 2.0;
+                vec2 uv = v_texcoord;
+                uv *= N;
+                uv = fract(uv);
                 
-                if(newTexCoord.y < 0.5){
-                    newTexCoord.y = newTexCoord.y * 2.0;
-                }else{
-                    newTexCoord.y = (newTexCoord.y-0.5) * 2.0;
-                }
-                
-                fragColor = texture(texture0, newTexCoord);
+                fragColor = texture(texture0, uv);
             }
-        """.trimIndent()
+            """.trimIndent()
 
         private val BLINDS_SOURCE = """
             #version 300 es
