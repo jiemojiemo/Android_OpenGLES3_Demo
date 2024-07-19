@@ -15,7 +15,7 @@ class MainActivity : AppCompatActivity() {
 
         glSurfaceView = findViewById(R.id.gl_surface_view)
         glSurfaceView.setEGLContextClientVersion(3)
-        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(BasicEffect(BasicEffectType.MOSAIC), this))
+        glSurfaceView.setRenderer(MyOpenGLSurfaceRender(ThreadSyncDrawer(), this))
 
         requestPermissions()
     }
