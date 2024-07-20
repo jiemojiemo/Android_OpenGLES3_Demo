@@ -1,15 +1,17 @@
 package com.xinging.opengltest
 
 import android.content.Context
-import android.graphics.BitmapFactory
+import android.opengl.EGL14
+import android.opengl.EGLConfig
 import android.opengl.GLES30
-import android.opengl.GLUtils
+import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ThreadSyncDrawer: AbstractDrawer() {
-
+    private val TAG = "ThreadSyncDrawer"
     companion object{
         val vertexShaderSource =
             """
@@ -59,11 +61,16 @@ class ThreadSyncDrawer: AbstractDrawer() {
         TextureDrawer.fragmentShaderSource
     )
 
+    private var useFence = AtomicBoolean(true)
+    private var mainThreadSyncObject:Long = 0
+    private var workingThreadSyncObject:Long = 0
+
+
+    var col = 0
+    var col1 = 1
+    var col2 = 2
+    var col3 = 3
     fun animateTexture() {
-        var col = 0
-        var col1 = 1
-        var col2 = 2
-        var col3 = 3
         val r1 = texHeight / 16.0f
         val r2 = texHeight / 8.0f
         val r3 = texHeight / 4.0f
@@ -231,12 +238,117 @@ class ThreadSyncDrawer: AbstractDrawer() {
         // unbind texture
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
 
-        // use share program and set texture location
-        shader.use()
-        shader.setInt("texture0", 0)
+        if(useFence.get()){
+            mainThreadSyncObject = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+            Log.d(TAG,"Use of GL Fence enabled.")
+        }
+
+        createWorkingThread()
+    }
+
+    private val threadExit: AtomicBoolean = AtomicBoolean(false)
+
+    private fun createWorkingThread(){
+        // get shared context
+        val sharedEGLContext = EGL14.eglGetCurrentContext()
+
+        val workingThread = Thread{
+            // shared egl context
+            val eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
+            val version = IntArray(2)
+            if (!EGL14.eglInitialize(eglDisplay, version, 0, version, 1)) {
+                throw RuntimeException("unable to initialize EGL14")
+            }
+
+            val attribList = intArrayOf(
+                EGL14.EGL_RED_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_NONE
+            )
+
+            val configs = arrayOfNulls<EGLConfig>(1)
+            val numConfigs = IntArray(1)
+            if (!EGL14.eglChooseConfig(
+                    eglDisplay, attribList, 0,
+                    configs, 0, configs.size, numConfigs, 0
+                )
+            ) {
+                throw RuntimeException("unable to find RGB888+recordable ES2 EGL config")
+            }
+            val attribListContext = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE)
+            val eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], sharedEGLContext, attribListContext, 0)
+
+            if (eglContext == null || eglContext == EGL14.EGL_NO_CONTEXT) {
+                throw RuntimeException("Failed to create new context.")
+            }
+
+            // Create a new surface to make current
+            val attribListSurface = intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE)
+            val eglSurface = EGL14.eglCreatePbufferSurface(eglDisplay, configs[0], attribListSurface, 0)
+
+            // eglMakeCurrent
+            if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
+                throw RuntimeException("eglMakeCurrent failed")
+            }
+
+            // loop for updating text data
+
+            while(!threadExit.get())
+            {
+                Thread.sleep(1000 / 100)
+
+                animateTexture()
+
+                if(useFence.get())
+                {
+                    if(mainThreadSyncObject != 0L)
+                    {
+                        GLES30.glWaitSync(mainThreadSyncObject, 0, GLES30.GL_TIMEOUT_IGNORED)
+                    }else
+                    {
+                        continue
+                    }
+
+                    GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
+                    val byteBuffer: ByteBuffer = ByteBuffer.wrap(textureData)
+                    GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, texWidth, texHeight, 0,
+                        GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, byteBuffer)
+
+                    workingThreadSyncObject = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+                }else
+                {
+                    GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texIds[0])
+                    val byteBuffer: ByteBuffer = ByteBuffer.wrap(textureData)
+                    GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, texWidth, texHeight, 0,
+                        GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, byteBuffer)
+                }
+
+
+            }
+
+        }
+        workingThread.start()
     }
 
     override fun draw() {
+        if(useFence.get())
+        {
+            if(workingThreadSyncObject != 0L)
+            {
+                GLES30.glWaitSync(workingThreadSyncObject, 0, GLES30.GL_TIMEOUT_IGNORED)
+            }
+            else
+            {
+                return
+            }
+        }
+
+        shader.use()
+        shader.setInt("texture0", 0)
+
         GLES30.glViewport(0, 0, screenWidth, screenHeight)
 
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
@@ -249,5 +361,15 @@ class ThreadSyncDrawer: AbstractDrawer() {
 
         // unbind vao
         GLES30.glBindVertexArray(0)
+
+        if(useFence.get())
+        {
+            if(mainThreadSyncObject == 0L)
+            {
+                Log.i(TAG, "mainThreadSynobj == NULL at the end of renderframe.")
+            }
+
+            mainThreadSyncObject = GLES30.glFenceSync(GLES30.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+        }
     }
 }
